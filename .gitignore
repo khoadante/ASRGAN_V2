@@ -1,3 +1,9 @@
+# Folders
+DIV2K
+samples
+results
+!results/pretrained_models
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -143,7 +149,6 @@ dmypy.json
 *.iso
 *.jar
 *.rar
-*.tar
 *.zip
 
 # Logs and databases
