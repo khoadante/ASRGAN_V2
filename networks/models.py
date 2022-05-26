@@ -1,18 +1,18 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torchvision.models as models
 from torch.nn.utils import spectral_norm
-from torchvision import transforms
-from torchvision.models.feature_extraction import create_feature_extractor
 
 from typing import List
 
 __all__ = [
     "EMA",
-    "ResidualDenseBlock", "ResidualResidualDenseBlock",
-    "Discriminator", "Generator",
-    "ContentLoss", "GANLoss"
+    "ResidualDenseBlock",
+    "ResidualResidualDenseBlock",
+    "Discriminator",
+    "Generator",
+    "ContentLoss",
+    "GANLoss",
 ]
 
 
@@ -33,7 +33,9 @@ class EMA(nn.Module):
         for name, param in self.model.named_parameters():
             if param.requires_grad:
                 assert name in self.shadow
-                new_average = (1.0 - self.weight_decay) * param.data + self.weight_decay * self.shadow[name]
+                new_average = (
+                    1.0 - self.weight_decay
+                ) * param.data + self.weight_decay * self.shadow[name]
                 self.shadow[name] = new_average.clone()
 
     def apply_shadow(self) -> None:
@@ -66,11 +68,21 @@ class ResidualDenseBlock(nn.Module):
     def __init__(self, channels: int, growth_channels: int) -> None:
         super(ResidualDenseBlock, self).__init__()
         self.conv1x1 = conv1x1(channels + growth_channels * 0, growth_channels)
-        self.conv1 = nn.Conv2d(channels + growth_channels * 0, growth_channels, (3, 3), (1, 1), (1, 1))
-        self.conv2 = nn.Conv2d(channels + growth_channels * 1, growth_channels, (3, 3), (1, 1), (1, 1))
-        self.conv3 = nn.Conv2d(channels + growth_channels * 2, growth_channels, (3, 3), (1, 1), (1, 1))
-        self.conv4 = nn.Conv2d(channels + growth_channels * 3, growth_channels, (3, 3), (1, 1), (1, 1))
-        self.conv5 = nn.Conv2d(channels + growth_channels * 4, channels, (3, 3), (1, 1), (1, 1))
+        self.conv1 = nn.Conv2d(
+            channels + growth_channels * 0, growth_channels, (3, 3), (1, 1), (1, 1)
+        )
+        self.conv2 = nn.Conv2d(
+            channels + growth_channels * 1, growth_channels, (3, 3), (1, 1), (1, 1)
+        )
+        self.conv3 = nn.Conv2d(
+            channels + growth_channels * 2, growth_channels, (3, 3), (1, 1), (1, 1)
+        )
+        self.conv4 = nn.Conv2d(
+            channels + growth_channels * 3, growth_channels, (3, 3), (1, 1), (1, 1)
+        )
+        self.conv5 = nn.Conv2d(
+            channels + growth_channels * 4, channels, (3, 3), (1, 1), (1, 1)
+        )
 
         self.leaky_relu = nn.LeakyReLU(0.2, True)
         self.identity = nn.Identity()
@@ -118,23 +130,21 @@ class ResidualResidualDenseBlock(nn.Module):
 
 
 class SeparableConv2d(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=1, bias=True):
+    def __init__(
+        self, in_channels, out_channels, kernel_size, stride=1, padding=1, bias=True
+    ):
         super(SeparableConv2d, self).__init__()
         self.depthwise = nn.Conv2d(
             in_channels,
             in_channels,
             kernel_size=kernel_size,
-            stride = stride,
+            stride=stride,
             groups=in_channels,
             bias=bias,
-            padding=padding
+            padding=padding,
         )
-        self.pointwise = nn.Conv2d(
-            in_channels,
-            out_channels, 
-            kernel_size=1,
-            bias=bias
-        )
+        self.pointwise = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=bias)
+
     def forward(self, x):
         return self.pointwise(self.depthwise(x))
 
@@ -167,8 +177,12 @@ class Discriminator(nn.Module):
             spectral_norm(nn.Conv2d(128, 64, (3, 3), (1, 1), (1, 1), bias=False)),
             nn.LeakyReLU(0.2, True),
         )
-        self.conv2 = spectral_norm(nn.Conv2d(64, 64, (3, 3), (1, 1), (1, 1), bias=False))
-        self.conv3 = spectral_norm(nn.Conv2d(64, 64, (3, 3), (1, 1), (1, 1), bias=False))
+        self.conv2 = spectral_norm(
+            nn.Conv2d(64, 64, (3, 3), (1, 1), (1, 1), bias=False)
+        )
+        self.conv3 = spectral_norm(
+            nn.Conv2d(64, 64, (3, 3), (1, 1), (1, 1), bias=False)
+        )
         self.conv4 = nn.Conv2d(64, 1, (3, 3), (1, 1), (1, 1))
 
         # Initialize model weights.
@@ -187,7 +201,9 @@ class Discriminator(nn.Module):
         down3 = self.down_block3(down2)
 
         # Up-sampling
-        down3 = F.interpolate(down3, scale_factor=2, mode="bilinear", align_corners=False)
+        down3 = F.interpolate(
+            down3, scale_factor=2, mode="bilinear", align_corners=False
+        )
         up1 = self.up_block1(down3)
 
         up1 = torch.add(up1, down2)
@@ -209,7 +225,9 @@ class Discriminator(nn.Module):
     def _initialize_weights(self) -> None:
         for module in self.modules():
             if isinstance(module, nn.Conv2d):
-                nn.init.kaiming_normal_(module.weight, mode="fan_out", nonlinearity="leaky_relu")
+                nn.init.kaiming_normal_(
+                    module.weight, mode="fan_out", nonlinearity="leaky_relu"
+                )
                 if module.bias is not None:
                     nn.init.constant_(module.bias, 0)
             elif isinstance(module, nn.BatchNorm2d):
@@ -221,7 +239,9 @@ class Discriminator(nn.Module):
 
 
 class Generator(nn.Module):
-    def __init__(self, in_channels: int, out_channels: int, upscale_factor: int) -> None:
+    def __init__(
+        self, in_channels: int, out_channels: int, upscale_factor: int
+    ) -> None:
         super(Generator, self).__init__()
         if upscale_factor == 2:
             in_channels *= 4
@@ -296,79 +316,3 @@ class Generator(nn.Module):
                 module.weight.data *= 0.1
                 if module.bias is not None:
                     nn.init.constant_(module.bias, 0)
-
-
-class ContentLoss(nn.Module):
-    """Constructs a content loss function based on the VGG19 network.
-    Using high-level feature mapping layers from the latter layers will focus more on the texture content of the image.
-
-    Paper reference list:
-        -`Photo-Realistic Single Image Super-Resolution Using a Generative Adversarial Network <https://arxiv.org/pdf/1609.04802.pdf>` paper.
-        -`ESRGAN: Enhanced Super-Resolution Generative Adversarial Networks                    <https://arxiv.org/pdf/1809.00219.pdf>` paper.
-        -`Perceptual Extreme Super Resolution Network with Receptive Field Block               <https://arxiv.org/pdf/2005.12597.pdf>` paper.
-
-     """
-
-    def __init__(self, feature_model_extractor_nodes: list,
-                 feature_model_normalize_mean: list,
-                 feature_model_normalize_std: list) -> None:
-        super(ContentLoss, self).__init__()
-        # Get the name of the specified feature extraction node
-        self.feature_model_extractor_nodes = feature_model_extractor_nodes
-        # Load the VGG19 model trained on the ImageNet dataset.
-        model = models.vgg19(True)
-        # Extract the thirty-sixth layer output in the VGG19 model as the content loss.
-        self.feature_extractor = create_feature_extractor(model, feature_model_extractor_nodes)
-
-        # set to validation mode
-        self.feature_extractor.eval()
-
-        # The preprocessing method of the input data.
-        # This is the VGG model preprocessing method of the ImageNet dataset.
-        self.normalize = transforms.Normalize(feature_model_normalize_mean, feature_model_normalize_std)
-
-        # Freeze model parameters.
-        for model_parameters in self.feature_extractor.parameters():
-            model_parameters.requires_grad = False
-
-    def forward(self, sr_tensor: torch.Tensor, hr_tensor: torch.Tensor) -> List[torch.Tensor]:
-        # Standardized operations
-        sr_tensor = self.normalize(sr_tensor)
-        hr_tensor = self.normalize(hr_tensor)
-
-        sr_features = self.feature_extractor(sr_tensor)
-        hr_features = self.feature_extractor(hr_tensor)
-
-        # Find the feature map difference between the two images
-        content_loss1 = F.l1_loss(sr_features[self.feature_model_extractor_nodes[0]],
-                                  hr_features[self.feature_model_extractor_nodes[0]])
-        content_loss2 = F.l1_loss(sr_features[self.feature_model_extractor_nodes[1]],
-                                  hr_features[self.feature_model_extractor_nodes[1]])
-        content_loss3 = F.l1_loss(sr_features[self.feature_model_extractor_nodes[2]],
-                                  hr_features[self.feature_model_extractor_nodes[2]])
-        content_loss4 = F.l1_loss(sr_features[self.feature_model_extractor_nodes[3]],
-                                  hr_features[self.feature_model_extractor_nodes[3]])
-        content_loss5 = F.l1_loss(sr_features[self.feature_model_extractor_nodes[4]],
-                                  hr_features[self.feature_model_extractor_nodes[4]])
-
-        return content_loss1, content_loss2, content_loss3, content_loss4, content_loss5
-
-
-class GANLoss(nn.Module):
-    def __init__(self, target_real_label=1.0, target_fake_label=0.0):
-        super(GANLoss, self).__init__()
-        self.register_buffer("real_label", torch.tensor(target_real_label))
-        self.register_buffer("fake_label", torch.tensor(target_fake_label))
-
-        self.loss = nn.BCEWithLogitsLoss()
-
-    def get_target_tensor(self, input, target_is_real):
-        if target_is_real:
-            target_tensor = self.real_label
-        else:
-            target_tensor = self.fake_label
-        return target_tensor.expand_as(input)
-
-    def __call__(self, input, target_is_real):
-        target_tensor = self.get_target_tensor(input, target_is_real)
-        return self.loss(input, target_tensor)
