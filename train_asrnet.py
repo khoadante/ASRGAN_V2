@@ -133,7 +133,7 @@ def load_dataset() -> List[CUDAPrefetcher]:
     train_dataloader = DataLoader(train_datasets,
                                   batch_size=config.batch_size,
                                   shuffle=True,
-                                  num_workers=config.num_workers,
+                                  num_workers=os.cpu_count(),
                                   pin_memory=True,
                                   drop_last=True,
                                   persistent_workers=True)
