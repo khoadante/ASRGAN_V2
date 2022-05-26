@@ -12,4 +12,10 @@ python setup.py
 8 vCPUs
 80 GB
 
-48 x 3 x 128 x 128 | 64 x 3 x 96 x 96
+V100 16GB
+    16 x 3 x 256 x 256 
+    48 x 3 x 128 x 128
+    64 x 3 x 96 x 96
+
+A100 40GB
+    64 x 3 x 256 x 256 (testing)
