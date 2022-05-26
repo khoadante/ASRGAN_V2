@@ -5,9 +5,9 @@ import torch
 from natsort import natsorted
 
 import config
-import imgproc
-from image_quality_assessment import NIQE
-from model import Generator
+from networks.models import Generator
+from utils.image_metrics import NIQE
+import utils.image_processing as imgproc
 
 
 def main() -> None:
