@@ -8,7 +8,7 @@ from torch.backends import cudnn
 mode = "train_asrnet"
 
 image_size = 256
-batch_size = 48
+batch_size = 4
 
 degradation_model_parameters_dict = {
     "sinc_kernel_size": 21,
@@ -71,7 +71,7 @@ upscale_factor = 4
 # Experiment name, easy to save weights and log files
 exp_name = "ASRNet_baseline"
 
-if mode == "train_realesrnet":
+if mode == "train_asrnet":
     # Dataset address
     train_image_dir = "datasets/DIV2K/ASRGAN/train"
     valid_image_dir = "datasets/DIV2K/ASRGAN/valid"
@@ -94,9 +94,9 @@ if mode == "train_realesrnet":
     lr_scheduler_gamma = 0.5
 
     # How many iterations to print the training result
-    print_frequency = 200
+    print_frequency = 1
 
-if mode == "train_realesrgan":
+if mode == "train_asrgan":
     # Dataset address
     train_image_dir = "datasets/DIV2K/ASRGAN/train"
     valid_image_dir = "datasets/DIV2K/ASRGAN/valid"
@@ -104,7 +104,7 @@ if mode == "train_realesrgan":
     test_hr_image_dir = f"datasets/Set5/GTmod12"
 
     # Incremental training and migration training
-    resume = "results/RealESRNet_baseline/g_last.pth.tar"
+    resume = "results/ASRNet_baseline/g_last.pth.tar"
     resume_d = ""
     resume_g = ""
 
@@ -131,7 +131,7 @@ if mode == "train_realesrgan":
     lr_scheduler_gamma = 0.5
 
     # How many iterations to print the training result
-    print_frequency = 200
+    print_frequency = 1
 
 if mode == "test":
     # Test data address
@@ -139,4 +139,5 @@ if mode == "test":
     sr_dir = f"results/test/{exp_name}"
     hr_dir = f"datasets/Set14/GTmod12"
 
-    model_path = "results/pretrained_models/RealESRNet_x4-DFO2K-5b34f555.pth.tar"
+    # model_path = "results/pretrained_models/ASRGAN_latest.pth.tar"
+    model_path = "results/ASRNet_baseline/g_best.pth.tar"
