@@ -10,7 +10,7 @@ import torch
 from torch import nn
 from torch import optim
 from torch.cuda import amp
-from torch.nn import functional as F, BCEWithLogitsLoss
+from torch.nn import functional as F
 from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
@@ -19,7 +19,7 @@ import config
 import imgproc
 from dataset import CUDAPrefetcher, TrainValidImageDataset, TestImageDataset
 from image_quality_assessment import NIQE
-from model import Generator, Discriminator, EMA, ContentLoss
+from model import Generator, Discriminator, EMA, ContentLoss, GANLoss
 
 
 def main():
@@ -48,7 +48,7 @@ def main():
         print("Loading RealESRNet model weights")
         # Load checkpoint model
         checkpoint = torch.load(config.resume, map_location=lambda storage, loc: storage)
-        generator.load_state_dict(checkpoint["state_dict"])
+        generator.load_state_dict(checkpoint["state_dict"], strict=False)
         print("Loaded RealESRNet model weights.")
 
     print("Check whether the pretrained discriminator model is restored...")
@@ -107,11 +107,11 @@ def main():
     niqe_model = NIQE(config.upscale_factor, config.niqe_model_path)
 
     # Transfer the IQA model to the specified device
-    niqe_model = niqe_model.to(device=config.device, memory_format=torch.channels_last, non_blocking=True)
+    niqe_model = niqe_model.to(device=config.device, non_blocking=True)
 
     # Create an Exponential Moving Average Model
     ema_model = EMA(generator, config.ema_model_weight_decay)
-    ema_model = ema_model.to(device=config.device, memory_format=torch.channels_last, non_blocking=True)
+    ema_model = ema_model.to(device=config.device, non_blocking=True)
     ema_model.register()
 
     for epoch in range(start_epoch, config.epochs):
@@ -180,7 +180,7 @@ def load_dataset() -> List[CUDAPrefetcher]:
     train_dataloader = DataLoader(train_datasets,
                                   batch_size=config.batch_size,
                                   shuffle=True,
-                                  num_workers=config.num_workers,
+                                  num_workers=os.cpu_count(),
                                   pin_memory=True,
                                   drop_last=True,
                                   persistent_workers=True)
@@ -212,8 +212,8 @@ def build_model() -> List[nn.Module]:
     generator = Generator(config.in_channels, config.out_channels, config.upscale_factor)
 
     # Transfer to CUDA
-    discriminator = discriminator.to(device=config.device, memory_format=torch.channels_last)
-    generator = generator.to(device=config.device, memory_format=torch.channels_last)
+    discriminator = discriminator.to(device=config.device,)
+    generator = generator.to(device=config.device,)
 
     return discriminator, generator
 
@@ -223,12 +223,12 @@ def define_loss() -> Union[nn.L1Loss, ContentLoss, nn.BCEWithLogitsLoss]:
     content_criterion = ContentLoss(config.feature_model_extractor_nodes,
                                     config.feature_model_normalize_mean,
                                     config.feature_model_normalize_std)
-    adversarial_criterion = nn.BCEWithLogitsLoss()
+    adversarial_criterion = GANLoss()
 
     # Transfer to CUDA
-    pixel_criterion = pixel_criterion.to(device=config.device, memory_format=torch.channels_last)
-    content_criterion = content_criterion.to(device=config.device, memory_format=torch.channels_last)
-    adversarial_criterion = adversarial_criterion.to(device=config.device, memory_format=torch.channels_last)
+    pixel_criterion = pixel_criterion.to(device=config.device,)
+    content_criterion = content_criterion.to(device=config.device,)
+    adversarial_criterion = adversarial_criterion.to(device=config.device,)
 
     return pixel_criterion, content_criterion, adversarial_criterion
 
@@ -253,7 +253,7 @@ def train(discriminator: nn.Module,
           train_prefetcher: CUDAPrefetcher,
           pixel_criterion: nn.L1Loss,
           content_criterion: ContentLoss,
-          adversarial_criterion: BCEWithLogitsLoss,
+          adversarial_criterion: GANLoss,
           d_optimizer: optim.Adam,
           g_optimizer: optim.Adam,
           epoch: int,
@@ -278,10 +278,10 @@ def train(discriminator: nn.Module,
     """
     # Defining JPEG image manipulation methods
     jpeg_operation = imgproc.DiffJPEG(differentiable=False)
-    jpeg_operation = jpeg_operation.to(device=config.device, memory_format=torch.channels_last, non_blocking=True)
+    jpeg_operation = jpeg_operation.to(device=config.device, non_blocking=True)
     # Define image sharpening method
     usm_sharpener = imgproc.USMSharp()
-    usm_sharpener = usm_sharpener.to(device=config.device, memory_format=torch.channels_last, non_blocking=True)
+    usm_sharpener = usm_sharpener.to(device=config.device, non_blocking=True)
 
     # Calculate how many batches of data are in each Epoch
     batches = len(train_prefetcher)
@@ -318,11 +318,10 @@ def train(discriminator: nn.Module,
         # Calculate the time it takes to load a batch of data
         data_time.update(time.time() - end)
 
-        hr = batch_data["hr"].to(device=config.device, memory_format=torch.channels_last, non_blocking=True)
-        kernel1 = batch_data["kernel1"].to(device=config.device, memory_format=torch.channels_last, non_blocking=True)
-        kernel2 = batch_data["kernel2"].to(device=config.device, memory_format=torch.channels_last, non_blocking=True)
-        sinc_kernel = batch_data["sinc_kernel"].to(device=config.device, memory_format=torch.channels_last,
-                                                   non_blocking=True)
+        hr = batch_data["hr"].to(device=config.device, non_blocking=True)
+        kernel1 = batch_data["kernel1"].to(device=config.device, non_blocking=True)
+        kernel2 = batch_data["kernel2"].to(device=config.device, non_blocking=True)
+        sinc_kernel = batch_data["sinc_kernel"].to(device=config.device, non_blocking=True)
 
         # Sharpen high-resolution images
         out = usm_sharpener(hr)
@@ -450,9 +449,13 @@ def train(discriminator: nn.Module,
 
         # Calculate the perceptual loss of the generator, mainly including pixel loss, feature loss and adversarial loss
         with amp.autocast():
+            sr = generator(lr)
             pixel_loss = config.pixel_weight * pixel_criterion(usm_sharpener(sr), hr)
-            content_loss = torch.sum(torch.multiply(config.content_weight, content_criterion(usm_sharpener(sr), hr)))
-            adversarial_loss = config.adversarial_weight * adversarial_criterion(discriminator(sr), real_label)
+            content_loss = torch.sum(torch.multiply(
+                torch.tensor(config.content_weight),
+                torch.tensor(content_criterion(usm_sharpener(sr), hr)),
+            ))
+            adversarial_loss = config.adversarial_weight * adversarial_criterion(discriminator(sr), True)
             # Calculate the generator total loss value
             g_loss = pixel_loss + content_loss + adversarial_loss
         # Call the gradient scaling function in the mixed precision API to backpropagate the gradient information of the fake samples
@@ -473,7 +476,7 @@ def train(discriminator: nn.Module,
         # Calculate the classification score of the discriminator model for real samples
         with amp.autocast():
             hr_output = discriminator(hr)
-            d_loss_hr = adversarial_criterion(hr_output, real_label)
+            d_loss_hr = adversarial_criterion(hr_output, True)
         # Call the gradient scaling function in the mixed precision API to backpropagate the gradient information of the real sample
         scaler.scale(d_loss_hr).backward()
 
@@ -482,7 +485,7 @@ def train(discriminator: nn.Module,
             # Use the generator model to generate fake samples
             sr = generator(lr)
             sr_output = discriminator(sr.detach().clone())
-            d_loss_sr = adversarial_criterion(sr_output, fake_label)
+            d_loss_sr = adversarial_criterion(sr_output, False)
             # Calculate the total discriminator loss value
             d_loss = d_loss_sr + d_loss_hr
         # Call the gradient scaling function in the mixed precision API to backpropagate the gradient information of the fake samples
@@ -571,7 +574,7 @@ def validate(model: nn.Module,
 
     with torch.no_grad():
         while batch_data is not None:
-            lr = batch_data["lr"].to(device=config.device, memory_format=torch.channels_last, non_blocking=True)
+            lr = batch_data["lr"].to(device=config.device, non_blocking=True)
 
             # Mixed precision
             with amp.autocast():
