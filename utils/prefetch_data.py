@@ -1,8 +1,8 @@
 import os
 from torch.utils.data import DataLoader
 
-from classes.datasets import TrainDataset, ValidDataset, TestDataset
 from classes.prefetchers import CUDAPrefetcher
+from classes.datasets import TrainDataset, ValidDataset, TestDataset
 
 from typing import List
 import config

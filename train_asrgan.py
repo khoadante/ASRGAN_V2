@@ -8,6 +8,7 @@ from networks.models import EMA
 from utils.build_models import build_asrgan_model
 from utils.model_losses import define_asrgan_loss
 from utils.model_optimizers import define_asrgan_optimizer
+from utils.model_schedulers import define_asrgan_scheduler
 from utils.prefetch_data import load_prefetchers
 from utils.train_models import train_asrgan
 from utils.validate_models import validate_asrgan
@@ -36,7 +37,7 @@ def main():
     d_optimizer, g_optimizer = define_asrgan_optimizer(discriminator, generator)
     print("Define all optimizer functions successfully.")
 
-    d_scheduler, g_scheduler = define_asrgan_optimizer(d_optimizer, g_optimizer)
+    d_scheduler, g_scheduler = define_asrgan_scheduler(d_optimizer, g_optimizer)
     print("Define all optimizer scheduler functions successfully.")
 
     if config.resume:

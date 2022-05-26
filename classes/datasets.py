@@ -84,9 +84,9 @@ class TrainDataset(Dataset):
             kernel1 = imgproc.sinc_kernel(omega_c, kernel_size1, pad_to=False)
         else:
             kernel1 = imgproc.random_mixed_kernels(
+                kernel_size1,
                 self.parameters["gaussian_kernel_type"],
                 self.parameters["gaussian_kernel_probability1"],
-                kernel_size1,
                 self.parameters["gaussian_sigma_range1"],
                 self.parameters["gaussian_sigma_range1"],
                 self.parameters["generalized_kernel_beta_range1"],
@@ -108,9 +108,9 @@ class TrainDataset(Dataset):
             kernel2 = imgproc.sinc_kernel(omega_c, kernel_size2, pad_to=False)
         else:
             kernel2 = imgproc.random_mixed_kernels(
+                kernel_size2,
                 self.parameters["gaussian_kernel_type"],
                 self.parameters["gaussian_kernel_probability2"],
-                kernel_size2,
                 self.parameters["gaussian_sigma_range2"],
                 self.parameters["gaussian_sigma_range2"],
                 self.parameters["generalized_kernel_beta_range2"],
