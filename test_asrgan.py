@@ -12,13 +12,13 @@ from model import Generator
 
 def main() -> None:
     # Initialize the super-resolution model
-    model = Generator(config.in_channels, config.out_channels, config.upscale_factor).to(device=config.device, memory_format=torch.channels_last)
-    print("Build Real_ESRGAN model successfully.")
+    model = Generator(config.in_channels, config.out_channels, config.upscale_factor).to(device=config.device,)
+    print("Build ASRGAN model successfully.")
 
     # Load the super-resolution model weights
     checkpoint = torch.load(config.model_path, map_location=lambda storage, loc: storage)
-    model.load_state_dict(checkpoint["state_dict"])
-    print(f"Load Real_ESRGAN model weights `{os.path.abspath(config.model_path)}` successfully.")
+    model.load_state_dict(checkpoint["state_dict"], strict=False)
+    print(f"Load ASRGAN model weights `{os.path.abspath(config.model_path)}` successfully.")
 
     # Create a folder of super-resolution experiment results
     results_dir = os.path.join("results", "test", config.exp_name)
@@ -34,7 +34,7 @@ def main() -> None:
     niqe = NIQE(config.upscale_factor, config.niqe_model_path)
 
     # Set the sharpness evaluation function calculation device to the specified model
-    niqe = niqe.to(device=config.device, memory_format=torch.channels_last, non_blocking=True)
+    niqe = niqe.to(device=config.device, non_blocking=True)
 
     # Initialize IQA metrics
     niqe_metrics = 0.0
@@ -59,7 +59,7 @@ def main() -> None:
         lr_tensor = imgproc.image2tensor(lr_image, range_norm=False, half=True).unsqueeze_(0)
 
         # Transfer Tensor channel image format data to CUDA device
-        lr_tensor = lr_tensor.to(device=config.device, memory_format=torch.channels_last, non_blocking=True)
+        lr_tensor = lr_tensor.to(device=config.device, non_blocking=True)
 
         # Only reconstruct the Y channel image data.
         with torch.no_grad():
