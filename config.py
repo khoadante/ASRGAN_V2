@@ -4,6 +4,12 @@ import numpy as np
 import torch
 from torch.backends import cudnn
 
+# Current configuration parameter method
+mode = "train_asrnet"
+
+image_size = 256
+batch_size = 48
+
 degradation_model_parameters_dict = {
     "sinc_kernel_size": 21,
     "gaussian_kernel_range": [7, 9, 11, 13, 15, 17, 19, 21],
@@ -62,10 +68,8 @@ niqe_model_path = "results/pretrained_models/niqe_model.mat"
 in_channels = 3
 out_channels = 3
 upscale_factor = 4
-# Current configuration parameter method
-mode = "train_realesrnet"
 # Experiment name, easy to save weights and log files
-exp_name = "RealESRNet_baseline"
+exp_name = "ASRNet_baseline"
 
 if mode == "train_realesrnet":
     # Dataset address
@@ -74,15 +78,11 @@ if mode == "train_realesrnet":
     test_lr_image_dir = f"datasets/Set5/LRbicx{upscale_factor}"
     test_hr_image_dir = f"datasets/Set5/GTmod12"
 
-    image_size = 256
-    batch_size = 48
-    num_workers = 4
-
     # Incremental training and migration training
     resume = ""
 
     # Total num epochs
-    epochs = 1298
+    epochs = 10
 
     # Optimizer parameter
     model_lr = 2e-4
@@ -103,17 +103,13 @@ if mode == "train_realesrgan":
     test_lr_image_dir = f"datasets/Set5/LRbicx{upscale_factor}"
     test_hr_image_dir = f"datasets/Set5/GTmod12"
 
-    image_size = 256
-    batch_size = 48
-    num_workers = 4
-
     # Incremental training and migration training
     resume = "results/RealESRNet_baseline/g_last.pth.tar"
     resume_d = ""
     resume_g = ""
 
     # Total num epochs
-    epochs = 519
+    epochs = 5
 
     # Feature extraction layer parameter configuration
     feature_model_extractor_nodes = ["features.2", "features.7", "features.16", "features.25", "features.34"]
@@ -137,10 +133,10 @@ if mode == "train_realesrgan":
     # How many iterations to print the training result
     print_frequency = 200
 
-if mode == "valid":
+if mode == "test":
     # Test data address
-    lr_dir = f"data/Set5/LRbicx{upscale_factor}"
+    lr_dir = f"datasets/Set14/LRbicx{upscale_factor}"
     sr_dir = f"results/test/{exp_name}"
-    hr_dir = f"data/Set5/GTmod12"
+    hr_dir = f"datasets/Set14/GTmod12"
 
     model_path = "results/pretrained_models/RealESRNet_x4-DFO2K-5b34f555.pth.tar"
