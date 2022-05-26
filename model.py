@@ -12,7 +12,7 @@ __all__ = [
     "EMA",
     "ResidualDenseBlock", "ResidualResidualDenseBlock",
     "Discriminator", "Generator",
-    "ContentLoss"
+    "ContentLoss", "GANLoss"
 ]
 
 
@@ -50,6 +50,10 @@ class EMA(nn.Module):
                 param.data = self.backup[name]
 
 
+def conv1x1(in_planes, out_planes, stride=1):
+    return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
+
+
 class ResidualDenseBlock(nn.Module):
     """Achieves densely connected convolutional layers.
     `Densely Connected Convolutional Networks <https://arxiv.org/pdf/1608.06993v5.pdf>` paper.
@@ -61,6 +65,7 @@ class ResidualDenseBlock(nn.Module):
 
     def __init__(self, channels: int, growth_channels: int) -> None:
         super(ResidualDenseBlock, self).__init__()
+        self.conv1x1 = conv1x1(channels + growth_channels * 0, growth_channels)
         self.conv1 = nn.Conv2d(channels + growth_channels * 0, growth_channels, (3, 3), (1, 1), (1, 1))
         self.conv2 = nn.Conv2d(channels + growth_channels * 1, growth_channels, (3, 3), (1, 1), (1, 1))
         self.conv3 = nn.Conv2d(channels + growth_channels * 2, growth_channels, (3, 3), (1, 1), (1, 1))
@@ -75,8 +80,10 @@ class ResidualDenseBlock(nn.Module):
 
         out1 = self.leaky_relu(self.conv1(x))
         out2 = self.leaky_relu(self.conv2(torch.cat([x, out1], 1)))
+        out2 = out2 + self.conv1x1(x)
         out3 = self.leaky_relu(self.conv3(torch.cat([x, out1, out2], 1)))
         out4 = self.leaky_relu(self.conv4(torch.cat([x, out1, out2, out3], 1)))
+        out4 = out4 + out2
         out5 = self.identity(self.conv5(torch.cat([x, out1, out2, out3, out4], 1)))
         out = torch.mul(out5, 0.2)
         out = torch.add(out, identity)
@@ -108,6 +115,28 @@ class ResidualResidualDenseBlock(nn.Module):
         out = torch.add(out, identity)
 
         return out
+
+
+class SeparableConv2d(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=1, bias=True):
+        super(SeparableConv2d, self).__init__()
+        self.depthwise = nn.Conv2d(
+            in_channels,
+            in_channels,
+            kernel_size=kernel_size,
+            stride = stride,
+            groups=in_channels,
+            bias=bias,
+            padding=padding
+        )
+        self.pointwise = nn.Conv2d(
+            in_channels,
+            out_channels, 
+            kernel_size=1,
+            bias=bias
+        )
+    def forward(self, x):
+        return self.pointwise(self.depthwise(x))
 
 
 class Discriminator(nn.Module):
@@ -208,7 +237,7 @@ class Generator(nn.Module):
         self.downsampling = nn.PixelUnshuffle(downscale_factor)
 
         # The first layer of convolutional layer
-        self.conv1 = nn.Conv2d(in_channels, 64, (3, 3), (1, 1), (1, 1))
+        self.conv1 = SeparableConv2d(in_channels, 64, (3, 3), (1, 1), (1, 1))
 
         # Feature extraction backbone network
         trunk = []
@@ -217,27 +246,27 @@ class Generator(nn.Module):
         self.trunk = nn.Sequential(*trunk)
 
         # After the feature extraction network, reconnect a layer of convolutional blocks
-        self.conv2 = nn.Conv2d(64, 64, (3, 3), (1, 1), (1, 1))
+        self.conv2 = SeparableConv2d(64, 64, (3, 3), (1, 1), (1, 1))
 
         # Upsampling convolutional layer
         self.upsampling1 = nn.Sequential(
-            nn.Conv2d(64, 64, (3, 3), (1, 1), (1, 1)),
+            SeparableConv2d(64, 64, (3, 3), (1, 1), (1, 1)),
             nn.LeakyReLU(0.2, True),
         )
 
         self.upsampling2 = nn.Sequential(
-            nn.Conv2d(64, 64, (3, 3), (1, 1), (1, 1)),
+            SeparableConv2d(64, 64, (3, 3), (1, 1), (1, 1)),
             nn.LeakyReLU(0.2, True),
         )
 
         # Output layer
         self.conv3 = nn.Sequential(
-            nn.Conv2d(64, 64, (3, 3), (1, 1), (1, 1)),
+            SeparableConv2d(64, 64, (3, 3), (1, 1), (1, 1)),
             nn.LeakyReLU(0.2, True),
         )
 
         # Output layer
-        self.conv4 = nn.Conv2d(64, out_channels, (3, 3), (1, 1), (1, 1))
+        self.conv4 = SeparableConv2d(64, out_channels, (3, 3), (1, 1), (1, 1))
 
     # The model should be defined in the Torch.script method.
     def _forward_impl(self, x: torch.Tensor) -> torch.Tensor:
@@ -319,5 +348,27 @@ class ContentLoss(nn.Module):
                                   hr_features[self.feature_model_extractor_nodes[2]])
         content_loss4 = F.l1_loss(sr_features[self.feature_model_extractor_nodes[3]],
                                   hr_features[self.feature_model_extractor_nodes[3]])
+        content_loss5 = F.l1_loss(sr_features[self.feature_model_extractor_nodes[4]],
+                                  hr_features[self.feature_model_extractor_nodes[4]])
 
-        return content_loss1, content_loss2, content_loss3, content_loss4
+        return content_loss1, content_loss2, content_loss3, content_loss4, content_loss5
+
+
+class GANLoss(nn.Module):
+    def __init__(self, target_real_label=1.0, target_fake_label=0.0):
+        super(GANLoss, self).__init__()
+        self.register_buffer("real_label", torch.tensor(target_real_label))
+        self.register_buffer("fake_label", torch.tensor(target_fake_label))
+
+        self.loss = nn.BCEWithLogitsLoss()
+
+    def get_target_tensor(self, input, target_is_real):
+        if target_is_real:
+            target_tensor = self.real_label
+        else:
+            target_tensor = self.fake_label
+        return target_tensor.expand_as(input)
+
+    def __call__(self, input, target_is_real):
+        target_tensor = self.get_target_tensor(input, target_is_real)
+        return self.loss(input, target_tensor)
