@@ -8,7 +8,7 @@ from torch.backends import cudnn
 mode = "train_asrnet"
 
 image_size = 256
-batch_size = 8
+batch_size = 16
 
 degradation_model_parameters_dict = {
     "sinc_kernel_size": 21,
@@ -82,7 +82,7 @@ if mode == "train_asrnet":
     resume = ""
 
     # Total num epochs
-    epochs = 10
+    epochs = 100
 
     # Optimizer parameter
     model_lr = 2e-4
@@ -109,7 +109,7 @@ if mode == "train_asrgan":
     resume_g = ""
 
     # Total num epochs
-    epochs = 5
+    epochs = 50
 
     # Feature extraction layer parameter configuration
     feature_model_extractor_nodes = ["features.2", "features.7", "features.16", "features.25", "features.34"]
