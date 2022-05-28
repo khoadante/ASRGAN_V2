@@ -4,7 +4,7 @@ import shutil
 import torch
 from torch.cuda import amp
 
-from networks.models import EMA
+from networks.asrgan.models import EMA
 from utils.build_models import build_asrnet_model
 from utils.model_losses import define_asrnet_loss
 from utils.model_optimizers import define_asrnet_optimizer

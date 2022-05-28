@@ -4,7 +4,7 @@ import shutil
 import torch
 from torch.cuda import amp
 
-from networks.models import EMA
+from networks.asrgan.models import EMA
 from utils.build_models import build_asrgan_model
 from utils.model_losses import define_asrgan_loss
 from utils.model_optimizers import define_asrgan_optimizer
